@@ -1,3 +1,5 @@
+# 2장 타입스크립트의 타입 시스템
+
 <aside>
 💡 2장에서는 타입 시스템의 기초부터 살펴보자. 타입 시스템이란 무엇인지, 어떻게 사용해야 하는지, 무엇을 결정해야 하는지, 가급적 사용하지 말아야 할 기능은 무엇인지 알아보자
 
@@ -73,4 +75,68 @@ const back: AB = twelve;
 // ‘12’ 형식은 'AB' 형식에 할당할 수 없습니다.
 ```
 
--
+- 특정 상황에서만 추가 속성을 허용하지 않는 잉여 속성 체크만 생각하다 보면 간과하기 쉽다.
+- 연산과 관련된 이해를 돕기 위해 값의 집합을 타입이라고 생각해 보자
+
+```tsx
+interface Person {
+  name: string;
+}
+interface Lifespan {
+  birth: Date;
+  death?: Date;
+}
+type PersonSpan = Person & Lifespan;
+```
+
+- & 연산자는 두 타입의 인터섹션을 계산한다. 언뜻 보기에 PersonSpan 타입을 공집합으로 예상하기 쉽다. 그러나 타입 연산자는 인터페이스의 속성이 아닌, 값의 집합에 적용된다. 그리고 추가적인 속성을 가지는 값도 여전히 그 타입에 속한다. 그래서 Person과 Lifespan을 둘 다 가지는 값은 인터섹션 타입에 속하게 된다.
+
+```tsx
+const ps: PersonSpan = {
+name: 'Alan Turing',
+birth: new Date('1912/06/23'),
+death: new Date(11954/06/07'),
+}; // 정상
+```
+
+- 당연히 앞의 세 가지보다 더 많은 속성을 가지는 값도 PersonSpan 타입에 속한다. 인터섹션 타입의 값은 각 타입 내의 속성을 모두 포함하는 것이 일반적
+- 두 인터페이스의 유니온에서는 그렇지 않다.
+- 유니온 타입에 속하는 값은 어떠한 키도 없기 때문에, 유니온에 대한 keyof는 공집합이어야만 한다.
+
+```tsx
+keyof (A&B) = (keyof A) | (keyof B)
+keyof (A|B) = (keyof A) & (keyof B)
+```
+
+- ‘서브타입’ 어떤 집합이 다른 집합의 부분집합이라는 의미
+
+```tsx
+interface VectorlD {
+  x: number;
+}
+interface Vector2D extends VectorlD {
+  y: number;
+}
+interface Vector3D extends Vector2D {
+  z: rnjmber;
+}
+```
+
+- Vector3D는 Vector2D의 서브타입, Vector2D는 Vector1D의 서브타입
+
+```tsx
+interface VectorlD {
+  x: number;
+}
+interface Vector2D {
+  x: number;
+  y: number;
+}
+interface Vector3D {
+  x: number;
+  y: number;
+  z: number;
+}
+```
+
+## Item8 타입 공간과 값 공간의 심벌 구분하기
