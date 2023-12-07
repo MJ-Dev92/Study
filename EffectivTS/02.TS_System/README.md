@@ -370,7 +370,7 @@ const Wyoming: IState = {
 - 이 예제처럼 속성을 확장하는 것을 ‘선언 병합’이라고 한다. 타입 선언 파일을 작성할 떄는 선언 병함을 지원하기 위해 반드시 인터페이스를 사용해야 하며 표준을 따라야 한다.
 - 프로젝트에서 어떤 문법을 사용할지 결정할 때 한 가지 일관된 스타일을 확립하고, 보강 기법이 필요한지 고려해야 한다.
 
-Item14 타입 연산과 제너릭 사용으로 반복 줄이기
+## Item14 타입 연산과 제너릭 사용으로 반복 줄이기
 
 ```tsx
 console.log('Cylinder 1x1',
@@ -473,3 +473,112 @@ type TopNavState = Pick<Stater ’userid' | 'pageTitle' | 1recentFiles'>;
 ```
 
 - 여기서 Pick은 제너릭 타입이다. Pick을 사용하는 것은 함수를 호출하는 것과 마찬가지다.
+- 생성하고 난 다음에 업데이트가 되는 클래스를 정의한다면, update 메서드 매개변수의 타입은 생성자와 동일한 매개변수이면서, 타입 대부분이 선택적 필드가 됩니다.
+
+```tsx
+interface Options {
+  width: number;
+  height: number;
+  color: string;
+  label: string;
+}
+interface OptionsUpdate {
+  width?: number;
+  height?: number;
+  color?: string;
+  label?: string;
+}
+class UlWidget {
+  constructor(init: Options) {
+    /*•••*/
+  }
+  update(options: OptionsUpdate) {
+    /* ... */
+  }
+}
+```
+
+- 매핑된 타입과 keyof를 사용하면 Options으로부터 OptionUpdate를 만들 수 있다.
+
+```tsx
+type OptionsUpdate = { [k in keyof Options]?: Options[k] };
+```
+
+- keyof는 타입을 받아서 속성 타입의 유니온을 반환한다.
+
+```tsx
+type OptionsKeys = keyof Options;
+// 타입이 "wid나!,, | "height" | "color" | "label"
+```
+
+- ‘?’는 각 속성을 선택적으로 만든다. 이 패턴 역시 아주 일반적이며 표준라이브러리에 Partial이라는 이름으로 포함되어 있다.
+- 제너릭 타입에서 매개변수를 제한할 수 있는 방법이 필요하다. 제너릭 타입에서 매개변수를 제한할 수 있는 방법은 extends를 사용하는 것이다. extends를 이용하면 제너릭 매개변수가 특정 타입을 확장하낟고 선언할 수 있다.
+- 타입이 값의 집합이라는 관점에서 생각하면 extends를 ‘확장’이 아니라 ‘부분 집합’이라는 걸 이해하는데 도움이 된다.
+
+## Item15 동적 데이터에 인덱스 시그니처 사용하기
+
+- 자바스크립트의 장점중 하나는 바로 객체를 생성하는 문법이 간단하다는 것이다.
+
+```tsx
+const rocket = {
+	name: 'Falcon 9',
+	variant: 'Block 5',
+	thrust: '7,607 kN’,
+};
+```
+
+- 타입스크립트에서는 타입에 ‘인덱스 시그니처’를 명시하여 유연하게 매핑을 표현할 수 있다.
+
+```tsx
+type Rocket = {[property: string]: string};
+	const rocket: Rocket = {
+	name: 'Falcon 9',
+	variant: 'vl.0',
+	thrust: ‘4,940 kN',
+}； // 정상
+```
+
+- [property: string]: string이 인데스 시그니처이며, 다음 세 가지 의미를 담고 있다.
+- 키의 이름, 키의 타입, 값의 타입 이렇게 타입 체크가 수행되면 네 가지 단점이 드라난다.
+- 잘못된 키를 포함해 모든 키를 혀용한다. name 대신 Name으로 작성해도 유효한 Rocket타입이 된다.
+- 특정 키가 필요하지 않다. {}도 유효한 Rocket 타입이다.
+- 키마다 다른 타입을 가질 수 없다. 예를 들어, thrust는 string이 아니라 number여야 할 수도 있다.
+- 타입 스크립트 언어 서비스는 다음과 같은 경우에 도움이 되지 못한다.
+  - name: 을 입력할 때, 키는 무엇이든 가능하기 떄문에 자동 완성 기능이 동작하지 않는다.
+- 인덱스 시그니처는 부정확하므로 더 나은 방법을 찾아야한다.
+
+## Item 16 number 인덱스 시그니처보다는 Array, 튜플, ArrayLike를 사용하기
+
+- 일반적으로 string 대신 number를 타입의 인덱스 시그니처로 사용할 이유는 많지 않다. 만약 숫자를 사용하여 인덱스할 항목을 지정한다면 Array또는 튜플 타입을 대신 사용하게 된다.
+- 배열은 객체이므로 키는 숫자가 아니라 문자열이다. 인덱스 시그니처로 사용된 number 타입은 버그르 잡기 위한 순수 타입스크립트 코드이다.
+
+## Item17 변경 관련된 오류 방지를 위해 readonly 사용하기
+
+- 만약 함수가 매개변수를 수정하지 않는다면 readonly 로 선언하는 것이 좋다 readonly 매개변수는 인터페이스를 명확하게 하며, 매개변수가 변경되는 것을 방지한다.
+- readonly를 사용하면 변경하면서 발생하는 오류를 방지할 수 있고, 변경이 발생하는 코드도 쉽게 찾을 수 있다.
+- const와 readonly는 얕게 동작하는 것을 명심해야 한다.
+
+```tsx
+function arraySum(arr: readonly number[]) {
+  let sum = 0,
+    num;
+  while ((num = arr.pop()) !== undefined) {
+    //~~~'readonly number[]' 형식에 'pop' 속성이 없습니다.
+    sum += num;
+  }
+  return sum;
+}
+```
+
+- 이 오류 메세지를 자세히 살펴보자 readonly number[]는 ‘타입’이고, number[]와 구분되는 몇 가지 특징이 있다.
+- number[]는 readonly number[]보다 기능이 많기 때문에, readonly number[]의 서브타입이 된다. 따라서 변경 가능한 배열을 readonly 배열에 할당할 수 있다. 하지만 그 반대는 불가능하다.
+
+```tsx
+const a: number[] = [1, 2, 3];
+const b: readonly number[] = a;
+const c: number[] = b;
+// ~ 'readonly number[]' 타입은' readonly1 이므로
+// 변경 가능한'number[]' 타입에 할당될 수 없습니다.
+```
+
+## Item 18 매핑된 타입을 사용하여 값을 동기화하기
