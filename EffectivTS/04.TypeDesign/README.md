@@ -362,3 +362,44 @@ const snowLeopard: Animal = {
   - 이름을 지을 때는 포함된 내용이나 계산 방식이 아니라 데이터 자체가 무엇인지를 고려해야 한다
 
 ## Item 37 공식 명칭에는 상표를 붙이기
+
+- 구조적 타이핑의 특성 때문에 가끔 코드가 이상한 결과를 낼 수 있다.
+
+```tsx
+interface Vector2D {
+  x: number;
+  y: number;
+}
+function calculateNom(p: Vector2D) {
+  return Math.sqrt(p.x * p.x + p.y * p.y);
+}
+
+calculateNorm({ x: 3, y: 4 }); // 정상,결과는 5
+const vec3D = { x: 3, y: 4, z: 1 };
+calculateNom(vec3D); // 정상! 결과는 동일하게 5
+```
+
+- 수학적으로 따지면 2차원 벡터를 사용해야 이치에 맞다. calculateNorm 함수가 3차원 벡터를 허용하지 않게 하려면 공식 명칭을 사용하면 된다. 공식 명칭 개념을 타입스크립트에서 흉내 내려면 ‘상표(brand)’를 붙이면 된다.
+
+```tsx
+interface Vector2D {
+	_brand: '2d';
+	x: number;
+	y: number;
+}
+
+function vec2D(x: number, y: number): Vector2D {
+	return {x, y, _brand: ‘2d’};
+}
+
+function calculateNorm(p: Vector2D) {
+	return Math.sqrt(p.x * p.x + p.y * p.y); // 기존과 동일합니다.
+}
+
+calculateNom(vec2D(3, 4)); // 정상, 5를 반환합니다.
+const vec3D = {x: 3, y: 4, z: 1};
+calculateNom(vec3D); // '_brand' 속성이 ... 형식에 없습니다.
+```
+
+- 타입스크립트는 구조적 타이핑(덕 타이핑)을 사용하기 떄문에, 값을 세밀하게 구분하지 못하는 경우가 있다. 값을 구분하기 위해 공식 명칭이 필요하다면 상표를 붙이는 것을 고려하자.
+- 상표 기법은 타입 시스템에서 동작하지만 런타임에 상표를 검사하는 것과 동일한 효과를 얻을 수 있다.
