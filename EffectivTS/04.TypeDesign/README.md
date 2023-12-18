@@ -1,3 +1,5 @@
+# 4장 타입 설계
+
 <aside>
 💡 4장을 이해하고 타입을 제대로 작성한다면, 인용문에서 비유한 것처럼 테이블(코드의 타입)뿐만 아니라 순서도(코드의 로직) 역시 쉽게 이해할 수 있을 것이다.
 
@@ -232,4 +234,131 @@ const kindOfBlue: Album = {
 	releaseDate: 'August 17th, 1959', // 날짜 형식이 다릅니다.
 	recordingType: 'Studio', // 오타（대문자 S）
 }；
+
+function recordRelease(title: string, date: string) {/*...*/}
+recordRelease(kindOfBlue.releaseDate, kindOfBlue.title); // 오류여야 하지만 정상
 ```
+
+- recordRelease 함수의 호출에서 매개변수들의 순서가 바뀌었지만, 둘 다 문자열이기 때문에 타입 체커가 정상으로 인식한다. 이를 ‘문자열을 남발하여 선언되었다’고 표현하기도 한다.
+- releaseDate 필드와 recordingType을 적절한 타입으로 정의할 수 있다.
+
+```tsx
+type RecordingType = "studio" | "live";
+
+interface Album {
+  artist: string;
+  title: string;
+  releaseDate: Date;
+  recordingType: RecordingType;
+}
+```
+
+- 이러한 방식은 세 가지의 장점을 더 가지고 있다.
+  - 타입을 명시적으로 정의함으로써 다른 곳으로 값이 전달되어도 타입 정보가 유지된다.
+  - 타입을 명시적으로 정의하고 해당 타입의 의키를 설명하는 주석을 붙여 넣을 수 있다.
+  - keyof 연산자로 더욱 세밀하게 객체의 속성 체크가 가능해진다.
+
+## Item 34 부정확한 타입보다는 미완성 타입을 사용하기
+
+- 일반적으로 타입이 구체적일수록 버그를 더 많이 잡고 타입스크립트가 제공하는 도구를 활용할 수 있다. 그러나 타입 선언의 정밀도를 높이는 일에는 주의를 기울여야 한다.
+
+```tsx
+interface Point {
+  type: "Point";
+  coordinates: number[];
+}
+interface LineString {
+  type: "LineString";
+  coordinates: number[][];
+}
+interface Polygon {
+  type: "Polygon";
+  coordinates: number[][][];
+}
+type Geometry = Point | LineString | Polygon; // 다른 것들도 추가될 수 있습니다.
+```
+
+- 큰 문제는 없지만 좌표에 쓰이는 number[]가 약간 추상적이다. 여기서 number[]는 튜플 타입으로 선언하는게 좋다.
+
+```tsx
+type GeoPosition = [number, number];
+interface Point {
+  type: "Point";
+  coordinates: GeoPosition;
+}
+// ...
+```
+
+- 타입을 더 구체적으로 개선 해서 더 나은 코드가 된거 같지만 GeoJSON의 위치 정보에는 세 번째 요소인 고도가 있을 수 있고 또 다른 정보가 있을 수 있다.
+- 결과적으로 타입이 부정확해졌다. 타입을 현재의 타입 선언을 그대로 사용하려면 사용자들은 타입 단언문을 도입하거나 as any를 추가해서 타입체커를 완전히 무시해야 한다.
+- 타입 안전성에 불쾌한 골짜기는 피해야 한다. 타입이 없는 것보다 잘못된게 더 나쁘다.
+- 정확한 타입을 모델링할 수 없다면, 부정확하게 모델리하지 말아야 한다. 또한 any와 unknown를 구별해서 사용하자.
+
+## Item 35 데이터가 아닌 API와 명세를 보고 타입 만들기
+
+- 타입 설계를 할때 예시 데이터가 아니라 명세를 참고해 타입을 생성해야한다. 명세를 참고해 타입을 생성하면 타입스크립트는 사용자가 실수를 줄일 수 있게 도와준다.
+- 코드의 구석 구석까지 타입 안정성을 얻기 위해 API 또는 데이터 형식에 대한 타입 생성을 고려해야 한다.
+- 데이터에 드러나지 않는 예외적인 경우들이 문제가 될 수 있기 떄문에 데이터보다는 명세로부터 코드를 생성하는 것이 좋다.
+
+## Item 36 해당 분야의 용어로 타입 이름 짓기
+
+- 이름 짓기 역시 타입 설계에서 중요한 부분이다. 엄선된 타입, 속성, 변수의 이름은 의도를 명확히 하고 코드와 타입의 추상화 수준을 높여 준다.
+
+```tsx
+interface Animal {
+	name: string;
+	endangered: boolean;
+	habitat: string;
+}
+const leopard: Animal = {
+	name: 'Snow Leopard',
+	endangered: false,
+	habitat: 'tundra',
+}；
+```
+
+- 이 코드는 네 가지 문제가 있다.
+  - name은 매우 일반적인 용어이다. 동물인지 학명인지 일반적인 명칭을 알 수 없다.
+  - endangered 속성이 멸종 위기를 표현하기 위해 boolean 타입을 사용한 것이 이상하다.
+  - habitat 속성은 너무 범위가 넓은 string타입, 서식지라는 뜻 자체도 불분명하기 때문에 다른 속성들보다 훨씬 모호하다.
+  - 객체의 이름과 속성의 name이 다른 의도로 사용된 것인지 불분명하다.
+- 반면 다음 코드의 타입 선언은 의미가 분명하다.
+
+```tsx
+interface Animal {
+	commonName: string;
+	genus: string;
+	species: string;
+	status: Conservationstatus;
+	climates: KoppenClimate[];
+}
+type Conservationstatus = 'EX' | ‘EW1 | 'CR' | 'EN' | 'VU' | 'NT' | 'LC;
+type KoppenClimate = |
+	'Af' | 'Am' | 'As' | 'Aw' |
+	'BSh' | 'BSk' | 'BWh' | 'BWk' |
+	'Cfa' | 'Cfb' | 'Cfc' | 'Csa' | 'Csb' | 'Csc' | 'Cwa' | 'Cwb' | 'Cwc' |
+	'Dfa' | 'Dfb' | 'Dfc' | 'Dfd' |
+	'Dsa' | 'Dsb' | 'Dsc' | 'Dwa' | 'Dwb' | 'Dwc' | 'Dwd' |
+	'EF' | 'ET';
+
+const snowLeopard: Animal = {
+	commonName: 'Snow Leopard',
+	genus: 'Panthera',
+	species: 'Uncia',
+	status: 'VU', //취약종(vulnerable)
+	climates: ['ET', 'EF', 'Dfd'], // 고산대(alpine) 또는 아고산대(subalpine)
+}；
+```
+
+- 이 코드는 다음 세 가지를 개선 했다.
+  - name은 더 구체적인 용어로 대체했다.
+  - endangered는 동물 보호 등급에 대한 IUCN의 표준 분류 체계인 ConsercvationStatus타입의 status로 변경되었다.
+  - habitat은 기후를 뜨하는 climates로 변경되었으며, 쾨펜 기후 분류를 사용했다.
+- 코드로 표현하고자 하는 모든 분야에는 주제를 설명하기 위한 전문 용어들이 있다. 자체적으로 용어를 만들어 내려고 하지 말고, 해당 분야에 이미 존재하는 용어를 사용해야한다.
+- 이런 용어들을 사용하면 사용자와 소통에 유리하며 타입의 명확성을 올릴 수 있다.
+- 타입, 속성, 변수에 이름을 붙일 때 명심해야 할 세 가지 규칙이 있다.
+  - 동일한 의미를 나타낼 때는 같은 용어를 사용해야 한다. 동의어를 사용하면 글을 읽을 때는 좋을 수 있지만, 코드에서 좋지 않다. 정말로 의미적으로 구분이 되어야 하는 경우에만 다른 용어를 사용해야 한다.
+  - data, info, thing, item, object, entity같은 모호하고 의미 없는 이름은 피해야 한다.
+  - 이름을 지을 때는 포함된 내용이나 계산 방식이 아니라 데이터 자체가 무엇인지를 고려해야 한다
+
+## Item 37 공식 명칭에는 상표를 붙이기
