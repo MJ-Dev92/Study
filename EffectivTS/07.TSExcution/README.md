@@ -1,391 +1,206 @@
-# 5장 any 다루기
+# 7장 코드를 작성하고 실행하기
 
-<aside>
-💡 마이그레이션을 할 때 코드의 일부분에 타입 체크를 비활성화시켜 주는 any 타입이 중요한 역할을 한다. 또한 any를 현명하게 사용하는 방법을 익혀야만 효과적인 타입스크립트 코드를 작성할 수 있다.
+## Item 53 타입스크립트 기능보다는 ECMAScript 기능을 사용하기
 
-</aside>
+- 시간이 흐르며 TC39는 부족했던 점들을 대부분 내장 기능으로 추가 했다. 그러나 자바스크립트에 새로 추가된 기능은 타입스크립트 초기 버전에서 독립적으로 개발했던 기능과 호환성 문제를 발생 시켰다.
+- 타입스크립트 초기 버전의 형태를 유지 하기 위해 자바스크립트의 신규 기능을 그대로 채택하고 타입스크립트 초기버전과 호환성을 포기 했다.
+- 이 과정에서 타입 공간과 값 공간의 경계를 혼란스럽게 만드는 기능이 있다. 여기서는 피해야 하는 기능을 몇가지 살펴 보자.
 
-## Item 38 any 타입은 가능한 한 좁은 범위에서만 사용하기
+### 열거형(enum)
 
 ```tsx
-function processBar(b: Bar) {
+enum Flavor {
+  VANILLA = 0,
+  CHOCOLATE = 1,
+  STRAWBERRY = 2,
+}
+let flavor = Flavor.CHOCOLATE; // 타입이 Flavor
+
+Flavor; // 자동완성 추천: VANILLA, CHOCOLATE, STRAWBERRY
+Flavor[0]; // 값이 "VANILLA"
+```
+
+- 단순히 값을 나열하는 것보다 실수가 적고 명확하기 때문에 일반적으로 열거형을 사용한느게 좋다 그러나 타입스크립트에서는 몇가지 문제가 있다.
+  - 숫자 열거형에 0, 1, 2 외의 다른 숫자가 할당되면 매우 위험하다.
+  - 상수 열거형은 보통 열거형과 달리 런타임에 완전히 제거된다, 문자열 열거형과 숫자 열거형과 전혀 다른 동작이다.
+  - preserveConstEnums플래그를 설정한 상태의 상수 열거형은 보통의 열거형처럼 런타임 코드에 상수 열거형 정보를 유지한다.
+- 타입스크립트의 일반적인 타입들이 할당 가능성을 체크하기 위해서 구조적 타이핑을 사용하는 반면, 문자열 열거형은 명목적 타이핑을 사용한다.
+
+```tsx
+enum Flavor {
+  VANILLA = "vanilla",
+  CHOCOLATE = "chocolate",
+  STRAWBERRY = "strawberry",
+}
+let flavor = Flavor.CHOCOLATE; // 타입이 Flavor
+flavor = "strawberry";
+// --------- '"strawberry'" 형식은 'Flavor' 형식에 할당될 수 없습니다.
+
+function scoop(flavor: Flavor) {
   /*...*/
 }
-
-function f() {
-  const x = expressionReturningFoo();
-  processBar(x);
-  // ~'Foo' 형식의 인수는 'Bar' 형식의 매개변수에 할당될 수 없습니다.
-}
 ```
 
-- 문맥상으로 x라는 변수가 동시에 Foo 타입과 Bar 타입에 할당 가능하다면, 오류를 제거하는 방법은 두 가지이다.
+- Flavor는 런타임 시점에는 문자열이기 때문에, 자바스크립트에서 다음 처럼 호출할 수 있다.
 
 ```tsx
-function fl() {
-  const x: any = expressionReturningFoo(); // 이렇게 하지 맙시다’.
-  processBar(x);
-}
-function f2() {
-  const x = expressionReturningFoo();
-  processBar(x as any); // 이게 낫습니다.
-}
+scoop('vanilla1); // 자바스크립트에서 정상
 ```
 
-- f2가 더 나은 이유는 any 타입이 processBar 함수의 매개변수에서만 사용된 표현식이므로 다른 코드에는 영향을 미치지 않기 때문이다.
-- f1에서는 함수의 마지막까지 x의 타입이 any인 반면, f2에서는 processBar 호출 이후에 x가 그대로 Foo 타입이다. 함수 바깥으로 영향을 미치지 않는다.
-- 강제로 타입 오류를 제거하려면 any 대신 @ts-ignore 사용하는 것이 좋다.
-- 객체와 관련된 any사용법을 살펴보자.
+- 그러나 타입스크립트에서는 열거형을 임포트하고 문자열 대신 사용해야 한다.
 
 ```tsx
-const config: Config = {
-	a： 1,
-	b： 2,
-	c: {
-		key: value
-		// ~’foo' 속성이 'Foo* 타입에 필요하지만’Bar' 타입에는 없습니다.
-	}
+scoop("vanilla");
+// ------------- "’vanilla"'형식은 'Flavor' 형식의 매개변수에 할당될 수 없습니다.
+
+import { Flavor } from "ice-cream";
+scoop(Flavor.VANILLA); // 정상
+```
+
+- JS와 TS 동작이 다르기 때문에 문자열 열거형은 사용하지 않는것이 좋습니다. 열거형대신 리터럴 타입의 유니온을 사용하면 된다.
+
+### 매개변수 속성
+
+- 일반적으로 클래스를 초기화할 떄 속성을 할당하기 위해 생성자의 매개변수를 사용한다.
+- 그러나 매개변수 속성과 관련된 몇가지 문제점이 존재한다
+  - 일반적으로 타입스크립트 컴파일은 타입 제거가 이루어지므로 코드가 줄어들지만, 매개변서 속성은 코드가 늘어나는 문법이다.
+  - 매개변수 속성이 런타임에는 실제로 사용되지만, 타입스크립트 관점에서는 사용되지 않는 것처럼 보인다.
+  - 매개변수 속성과 일반 속성을 섞어서 사용하면 클래스의 설계가 혼란스러워진다.
+- 일반적으로 타입스크립트 코드에서 모든 타입 정보를 제거하면 자바스크립트가 되지만 열거형, 매개변수 속성, 트리플 슬래시 임포트, 데코레이터는 타입 정보를 제거한다고 자바스크립트가 되지 않는다.
+- 타입스크립트의 역할을 명확하게 하려면, 열거형, 매개변수 속성, 트리플 슬래시 임포트, 데코레이터는 사용하지 않는게 좋다
+
+## Item54 객체를 순회하는 노하우
+
+```tsx
+const obj = {
+	one: 'uno',
+	two: 1 dos',
+	three: 'tres',
 }；
+for (const k in obj) {
+	const v = obj[k];
+				// ---------obj 에 인덱스 시그니처가 없기 때문에
+				// 엘리먼트는 암시적으로 'any' 타입입니다.
+}
 
-const config: Config = {
-	a： 1,
-	b: 2,
-	c: {
-		key: value
+// const obj: {
+// one: string;
+// two: string;
+// three: string;
+// }
+for (const k in obj) { // const k: string
+// ...
+}
+```
+
+- k 타입은 string인 반면 obj 객체에는 ‘one’, ‘two’, ‘three’ 세 개의 키만 존재한다. k와 obj 객체의 키 타입이 서로 다르게 추론되어 오류가 발생한 것이다.
+- k의 타입을 더욱 구체적으로 명시해 주면 오류는 사라진다.
+
+```tsx
+let k: keyof typeof obj; // "one" | "two" | "three" 타입
+for (k in obj) {
+  const v = obj[k]; // 정상
+}
+```
+
+- 첫 번째 문장의 질문을 좀 더 구체적으로 바꿔 보자
+
+```tsx
+interface ABC {
+  a: string;
+  b: string;
+  c: number;
+}
+
+function foo(abc: ABC) {
+  for (const k in abc) {
+    // const k: string
+    const v = abc[k];
+    // --------- 'ABC 타입에 인덱스 시그니처가 없기 때문에
+    //엘리먼트는 암시적으로'any'가 됩니다.
+  }
+}
+```
+
+- 첫 번째 예제와 동일한 오류이다. 그러므로 같은 선언으로 오류를 제거할 수있다.
+- 제대로된 오류인 이유를 예로 들어보자
+
+```tsx
+const x = {a: 'a', b: *b', c: 2, d: new DateO};
+foo(x); // 정상
+```
+
+- foo 함수는 a, b, c, 속성 외에 d를 가지는 x 객체로 호출이 가능하다. foo 함수는 ABC 타입에 ‘할당 가능한’ 어떠한 값이든 매개변수로 허용하기 때문이다.
+
+```tsx
+function foo(abc: ABC) {
+  let k: keyof ABC;
+  for (k in abc) {
+    // let k: "a" | "b" | "c"
+    const v = abc[k]; // string | number 타입
+  }
+}
+```
+
+- k가 ‘a’ | ‘b’ | ‘c’ 타입으로 한정되어 문제가 된 것처럼, v도 string | number 타입으로 한정되어 범위가 너무 좁아 문제가 된다. d 속성은 Date 타입뿐만 아니라 어떠한 타입이든 될 수 있기 때문에 v가 string | number 타입으로 추론된 것은 잘못이며 런타임의 동작을 예상하기 어렵다
+- 이런 문제를 해결하려면 Object.entries를 사용하면 된다.
+
+```tsx
+function foo(abc: ABC) {
+	for (const [k, v] of Object.entries(abc)) {
+		k // string 타입
+		v // any 타입
 	}
-} as any; // 이렇게 하지 맙시다!
+}
 
-const config: Config = {
-	a: 1,
-	b: 2, // 이 속성은 여전히 체크됩니다.
-	c: {
-		key: value as any
+> Object.prototype.z = 3; // 제발 이렇게 하지 맙시다!
+> const obj = {x: 1, y: 2};
+> for (const k in obj) { console.log(k); }
+x
+y
+z
+```
+
+## Item 55 DOM 계층 구조 이해하기
+
+- DOM 계층은 웹브라우저에서 자바스크립트를 실행할 때 어디에서나 존재한다. 그리고 많은 부분에서 엘리먼트의 DOM과 관련된 메서드를 사용하고 엘리먼트의 속성을 사용하게 된다.
+- 타입스크립트에서 DOM 엘리먼트의 계층 구조를 파악하기 용이하다. Element와 EventTarget에 달려 있는 Node의 구체적인 타입을 안다면 타입 오류를 디버깅할 수 있고, 언제 타입 단언을 사용해야 할지 알 수 있다.
+- 계층 구조별로 타입을 좀 더 자세히 알아보자
+  - 첫 번째, EventTarget은 DOM 타입 중 가장 추상화된 타입이다. 이벤트 리스너를 추가하거나 제거하고, 이벤트를 보내는 것밖에 할 수없다.
+  - 두 번쨰, Node 타입을 알아보자.
+  - 세 번째, Element와 HTMLElement를 알아보자 SVG 태그의 전체 계층 구조를 포함하면 HTML이 아닌 엘리먼트가 존재하는데, 바로 Element의 또 다른 종류인 SVGElement이다.
+  - 마지막으로 HTMLxxxElement 형태의 특정 엘리먼트들은 자신만의 고유한 속성을 가지고있다.
+- Node, Element, HTMLElement, EventTarget간의 차이점, 그리고 Event와 Mouse Event의 차이점을 알아야 한다.
+- DOM 엘리먼트와 이벤트에는 충분히 구체적인 타입 정보를 사용하거나, 타입스크립트가 추론할 수 있도록 문백 정보를 활용하자
+
+## Item 56 정보를 감추는 목적으로 private 사용하지 않기
+
+- 타입스크립트에는 public, protected, private 접근 제어자를 사용해서 공개 규칙을 강제할 수 있는 것으로 오해할 수있다.
+
+```tsx
+class Diary {
+  private secret = "cheated on my English test";
+}
+const diary = new Diary();
+diary.secret;
+// 'secret' 속성은 private이며
+// 'Diary' 클래스 내에서만 접근할 수 있습니다.
+```
+
+- 그러나 public, protected, private 같은 접근 제어자는 타입스크립트 키워드이기 때문에 컴파일 후에는 제거된다. 이 타입스크립트 코드를 컴파일 하게 되면 다음 예제의 자바스크립 코드로 변환된다.
+
+```tsx
+class Diary {
+	constructor() {
+		this.secret = 'cheated on my English test1;
 	}
-}；
-```
-
-- 객체 전체를 any로 단언하면 다른 속성들 역시 타입 체크가 되지 않는다. 그러므로 최소한 범위에만 any를 사용하자
-
-## Item 39 any를 구체적으로 변형해서 사용하기
-
-- any는 자바스크립트에서 표현할 수 있는 모든 값을 아우르는 매우 큰 범위의 타입이다.
-- 일반적인 상황에서는 any 보다 더 구체적으로 표현할 수 있는 타입이 존재할 가능성이 높기 떄문에 더 구체적인 타입을 찾아 타입 안전성을 높이도록 해보자.
-- any 타입의 값을 그대로 정규식이나 함수에 넣는 것은 권장되지 않는다.
-
-```tsx
-function getLengthBad(array: any) {
-  // 이렇게 맙시다!
-  return array.length;
 }
-
-function getLength(array: any[]) {
-  return array.length;
-}
+const diary = new Diary();
+diary.secret;
 ```
 
-- getLength가 더 좋은 함수인 이유는 세 가지다.
-  - 함수 내의 array.length 타입이 체크된다.
-  - 함수의 반환 타입이 any 대신 number로 추론된다.
-  - 함수 호출될 때 매개변수가 배열인지 체크된다.
-- 함수 매개변수를 구체화할 때, 배열의 배열 형태라면 any[] [] 처럼 선언하면 된다. 그리고 함수의 매개변수가 객체이긴 하지만 값을 알 수 없다면 {[key: string] : any}처럼 선언하면 된다.
+- 단언문을 사용하면 타입스크립트 상태에서도 private 속성에 접근할 수 있다.
+- 즉, 정보를 감추기 위해 private을 사용하면 안된다.
+- 확실히 데이터를 감추고 싶다면 클로저를 사용해야 한다.
 
-```tsx
-function hasTwelveLetterKey(o: { [key: string]: any }) {
-  for (const key in o) {
-    if (key.length === 12) {
-      return true;
-    }
-  }
-  return false;
-}
-```
-
-- 함수의 매개변수가 객체지만 값을 알 수 없다면 비기본형타입을 포함하는 object 타입을 사용할 수 있다.
-- object 타입은 객체의 키를 열거할 수는 있지만 속성에 접근할 수 없다는 점에서 {[key: string]: any}와 약간 다르다.
-
-```tsx
-function hasTwelveLetterKey(o: object) {
-  for (const key in o) {
-    if (key.length === 12) {
-      console.log(key, o[key]);
-      //----- ’{}' 형식에 인덱스 시그니처가 없으므로
-      // 요소에 암시적으로 'any' 형식이 있습니다.
-      return true;
-    }
-  }
-  return false;
-}
-```
-
-- 함수 타입에서도 단순히 any를 사용하면 안된다. 최소한으로나마 구체화할 수 있는 세 가지 방법이 있다.
-
-```tsx
-type Fn0 = () => any; // 매개변수 없이 호출 가능한 모든 함수
-type Fnl = (arg: any) => any; // 매개변수 1 개
-type FnN = (.. .args: any[]) => any; // 모든 개수의 매개변수
-																			// "Function" 타입과 동일합니다.
-```
-
-- 마지막줄을 보면 …args의 타입을 any[]로 선언했다. any로 선언해도 동작하지만 any[]로 선언하면 배열 형태라는 것을 알 수 있어 더 구체적이다.
-
-```tsx
-const numArgsBad = (.. .args: any) => args.length; // any를 반환합니다.
-const numArgsGood = (.. .args: any []) => args, length; // number를 반환합니다.
-```
-
-## Item 40 함수 안으로 타입 단언문 감추기
-
-- 함수 내부에서는 타입단언을 사용하고 함수 외부로 드러나는 타입 정의를 정확히 명시하는 정도로 끝내는 게 낫다. 프로젝트 전반에 위험한 타입 단언문이 드러나 있는 것보다, 제대로 타입이 정의된 함수 안으로 타입 단언문을 감추는 것이 더 좋은 설계이다.
-
-```tsx
-declare function cacheLast<T extends Function>(fn: T): T;
-
-declare f나nction shallowEqual(a: any, b: any): boolean;
-function cacheLast<T extends Function>(fn: T): T {
-	let LastArgs: any[]|null = null;
-	let lastResult: any;
-	return function(...args: any[]) {
-								// ~~~~~~~~~~
-								// '(...args: any[]) => any' 형식은 'T* 형식에 할당할 수 없습니다.
-		if (SlastArgs || !shallowEqual(lastArgs, args)) {
-			lastResult = fn(...args);
-			lastArgs = args;
-		}
-			return lastResult;
-	};
-}
-```
-
-- 타입스크립트는 반환문에 있는 함수와 원본 함수 T타입이 어떤 관련이 있는지 알지 못하기 때문에 오류가 발생했다.
-
-```tsx
-function cacheLast<T extends Function>(fn: T): T {
-  let lastArgs: any[] | null = null;
-  let lastResult: any;
-  return function (...args: any[]) {
-    if (!lastArgs || !shallowEq나al(lastArgs, args)) {
-      lastResult = fn(...args);
-      lastArgs = args;
-    }
-    return lastRes나It;
-  } as unknown as T;
-}
-```
-
-- 타입 정의에는 any가 없기 때문에 cacheLast를 호출하는 쪽에는 any가 사용됐는지 알지 못한다.
-- 타입 선언문은 일반적으로 타입을 위험하게 만들지만 상황에 따라 필요하기도 하고 현식적인 해결책이 되기도 한다. 불가피하게 사용해야 한다면, 정확한 정의를 가지는 함수 안으로 숨기도록 하자.
-
-## Item41 any의 진화를 이해하기
-
-- 타입스크립트에서 변수의 타입은 변수를 선언할 때 결정된다. 새로운 값이 추가되도록 확장할 수는 없다. 그러나 any 타입과 관련해서 예외인 경우가 존재한다.
-
-```tsx
-function range(start, limit) {
-  const out = [];
-  for (let i = start; i < limit; i++) {
-    out.push(i);
-  }
-  return out;
-}
-```
-
-- 이 코드를 타입스크립트로 변환하면 예상한 대로 동작한다.
-
-```tsx
-function range(start: n나mber, limit: number) {
-  const out = [];
-  for (let i = start; i < limit; i++) {
-    out.push(i);
-  }
-  return out; // 반환 타입이 number[]로 추론됨.
-}
-```
-
-- out의 타입이 처음에는 any 타입 배열인 []로 초기화되었는데, 마지막에는 number[]로 추론되고 있다.
-- 코드에 out이 등장하는 세 가지 위치를 조사해 보면 이유를 알 수 있다.
-
-```tsx
-function range(start: number, limit: number) {
-  const out = []; // 타입이 any[]
-  for (let i = start; i < limit; i++) {
-    out.push(i); // out의 타입이 any[]
-  }
-  return out; // 타입이 number[]
-}
-```
-
-- out의 타입은 any[]로 선언되었지만 number 타입의 값을 넣는 순간부터 타입은 number[]로 진화한다.
-- 타입의 진화는 타입 좁히기와 다르다 배열에 다양한 타입의 요소를 넣으면 배열의 타입이 확장되며 진화한다.
-
-```tsx
-const result = []; // 타입이 any[]
-result.push("a");
-result; // 타입이 string[]
-result.push(1);
-result; // 타입이 (string | number) []
-```
-
-- 조건문에서는 분기에 따라 타입이 변한다.
-
-```tsx
-let val; //타입이 any
-if (Math.random() < 0.5) {
-  val = /hello/;
-  val; // 타입이 RegExp
-} else {
-  val = 12;
-  val; // 타입이| number
-}
-val; // 타입이 number | RegExp
-```
-
-- 일반적인 타입은 정제 되지만 암시적 any와 any[] 타입은 진화할 수 있다. 이러한 동작이 발생하는 코드를 인지하고 이해할 수 있어야 한다.
-- any를 진화시키는 방식보다 명시적 타입 구문을 사용하는 것이 안전한 타입을 유지하는 방법이다.
-
-## Item 42 모르는 타입의 값에는 any 대신 unknown을 사용하기
-
-- unknown 은 any 대신 사용할 수 있는 안전한 타입이다. 어떠한 값이 있지만 그 타입을 알지 못하는 경우라면 unknown을 사용하면 된다.
-
-```tsx
-interface Book {
-	name: string;
-	author: string;
-}
-
-const book: Book = parseYAML('
-	name: Wuthering Heights
-	author: Emily Bronte
-')；
-
-function parseYAML(yaml: string): any {
-	const book = parseYAMLC
-		name: Jane Eyre
-		author: Charlotte Bronte
-	')；
-	alert (book, title); // 오류 없음,런타임에 "undefined" 경고
-	book (‘read1); // 오류 없음,런타임에 "TypeError: book 은 함수가 아닙니다" 예외 발생
-}
-
-function safeParseYAMUyaml: string): unknown {
-	return parseYAML(yaml);
-}
-	const book = safeParseYAML(`
-		name: The Tenant of Wildfell Hall
-		author: Anne Bronte
-	`)；
-	alert(book.title);// 개체가’unknown' 형식입니다.
-	book("read");// 개체가 'unknown' 형식입니다.
-```
-
-- any가 위함한 이유는 두 가지 특징으로부터 비롯된다.
-  - 어떠한 타입이든 any타입에 할당 가능하다.
-  - any타입은 어떠한 타입으로도 할당 가능하다.
-- 사용자가 타입 단언문이나 타입 체크를 사용하도록 강제하려면 unkown을 사용하면 된다.
-- {}, object, unknown의 차이점을 이해해야 한다.
-
-## Item 43 몽키 패치보다는 안전한 타입을 사용하기
-
-- 자바스크립트의 가장 유명한 특징 중 하나는, 객체와 클래스에 임의의 속성을 추가할 수있을 만큼 유연하다는 것이다. 객체에 속성을 추가할 수 있는 기능은 종종 웹 페이지에서 window나 document 에 값을 할당하여 전역 변수를 만드는 데 사용된다.
-
-```tsx
-window.monkey = "Tamarin";
-document.monkey = "Howler";
-```
-
-- 또는 DOM 엘리먼트에 데이터를 추가하기 위해서도 사용된다.
-
-```tsx
-const el = document.getElementByld("colobus");
-el.home = "tree";
-```
-
-- 전역변수를 사용하면 은연중에 프로그램 내에서 서로 멀리 떨어진 부분들 간에 의존성을 만들게 된다. 그러면 함수를 호출할 때마다 부작용을 고려해야한다.
-- 타입스크립트까지 더하면 또 다른 문제가 발생한다. 타입 체커는 Document와 HTMLElement의 내장 속성에 대해서는 알고 있지만, 임의로 추가한 속성에 대해서는 알지 못한다.
-
-```tsx
-document.monkey = "Tamarin";
-// ~~~~'Document' 유형에 'monkey' 속성이 없습니다.
-```
-
-- 이 오류를 해결하는 가장 간단한 방법은 any 단언문을 사용하는 것이다.
-
-```tsx
-(document as any).monkey = "Tamarin"; // 정상
-```
-
-- any를 사용함으로써 타입 안정성을 상실하고, 언어 서비스를 사용할 수 없게 된다.
-
-```tsx
-(document as any).monky = "Tamarin"; // 정상,오타
-(document as any).monkey = /Tamarin/; // 정상, 잘못된 타입
-```
-
-- 최선의 해결책은 document또는 DOM으로부터 데이터를 분리하는 것이다.
-- 분리할 수 없는 경우 두가지 차선책이 존재한다.
-
-  - interface의 특수 기능 중 하나인 보강을 사용하는것,
-
-  ```tsx
-  interface Document {
-    /** 몽키 패치의 속(genus) 또는 종(species) */
-    monkey: string;
-  }
-  docume;
-  nt.monkey = "Tamarin"; // 정상
-  ```
-
-  - 보강을 사용하는 방법이 any보다 나은점은 다음과 같다.
-    - 타입이 더 안전하다. 타입 체커는 오타나 잘못된 타입의 할당을 오류로 표시한다.
-    - 속석에 주석을 붙일 수 있다.
-    - 속성에 자동완성을 사용할 수 있다.
-    - 몽키 패치가 어떤 부분에 적용되었는지 정확한 기록이 남는다.
-  - 그리고 모듈 관점에서(타입스크립트 파일이 import / export를 사용하는 경우), 제대로 동작하게 하려면 global 선언을 추가해야 한다.
-
-  ```tsx
-  export {};
-  declare global {
-    interface Document {
-      /** 몽키 패치의 속(genus) 또는 종(species) */
-      monkey: string;
-    }
-  }
-
-  document.monkey = "Tamarin"; // 정상
-  ```
-
-  - 두 번째, 더 구체적인 타입 단언문을 사용하는 것이다.
-
-  ```tsx
-  interface MonkeyDocument extends Document {
-    /** 몽키 패치의 속(genus) 또는 종(species) */
-    monkey: string;
-  }
-  (document as MonkeyDocument).monkey = "Macaque";
-  ```
-
-## Item 44 타입 커버리지를 추적하여 타입 안전성 유지하기
-
-- noImplicitAny를 설정하고 모든 암시적 any 대신 명시적 타입 구문을 추가해도 any 타입과 관련된 문제들로 부터 안전하다고 할 수 없다. 그 이유는 두가지 경우가 있다.
-  - 명시적 any 타입
-    - 아이템 38과 아이템 39의 내용에 따라 any 타입의 범위를 좁히고 구체적으로 만들어도 여전히 any 타입이다.
-  - 서드파티 타입 선언
-    - 이 경우는 @types 선언 파일로부터 any 타입이 전파되기 때문에 특별히 조심해야 한다.
-- any 타입은 타입 안전성과 생산성에 부정적 영향을 미칠 수 있으므로, 프로젝트에서 any의 개수를 추적하는 것이 좋다.
-- npm의 type-cover-age 패키지를 활용하여 any를 추적할 수 있는 몇가지 방법이 있다.
-
-```tsx
-$ npx type-coverage
-9985 / 10117 98.69%
-```
-
-- 이 프로젝트의 10,117개 심벌 중 9,985(98.69%)가 any가 아니거나 any의 별칭이 아닌 타입을 가지고 있음을 알 수 있다. 실수로 any타입이 추가된다면 백분율이 감소하게 된다.
-- 타입 커버리지를 사용할 때 —detail플래그를 붙이면, any타입이 있는 곳을 모두 출력해 준다.
-
-```tsx
-$ npx type-cove rage —detail
-path/to/code.ts:1:10 getColumnlnfo
-path/to/module.ts:7:1 pt2
-...
-```
-
-- 작성한 프로그램의 타입이 얼마나 잘 선언되었는지 추적해야 한다. 추적함으로써 any의 사용을 줄여 나갈 수 있고 타입 안전성을 꾸준히 높일 수 있다.
+## Item 57 소스맵을 사용하여 타입스크립트 디버깅하기
