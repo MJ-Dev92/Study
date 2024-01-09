@@ -9,7 +9,11 @@
 
 ### 1.1 싱글톤 패턴
 
-- 싱글톤 패턴은 하나의 클래스에 오직 하나의 인스턴스만 가지는 패턴이다. 단 하나의 인스턴스를 만들어 이를 기반으로 로직을 만드는 데 쓰이며, 보통 데이터베이스 연결 모듈에 많이 사용한다.
+<aside>
+💡 싱글톤 패턴은 하나의 클래스에 오직 하나의 인스턴스만 가지는 패턴이다. 단 하나의 인스턴스를 만들어 이를 기반으로 로직을 만드는 데 쓰이며, 보통 데이터베이스 연결 모듈에 많이 사용한다.
+
+</aside>
+
 - 하나의 인스턴스를 만들어 놓고 해당 인스턴스를 다른 모듈들이 공유하며 사용하기 때문에 인스턴스를 생성할 때 드는 비용이 줄어드는 장점이 있다.
 - 하지만 의존성이 높아진다는 단점이 있다.
 
@@ -95,6 +99,160 @@ console.log(a === b); // true
 
 - 의존성 주입은 ‘상위 모듈은 하위 모듈에서 어떠한 것도 가져오지 않아야 한다. 또한, 둘 다 추상화에 의존해야 하며, 이때 추상화는 세부 사항에 의존하지 말아야 한다’라는 의존성 주입 원칙을 지켜주면서 만들어야 한다.
 
-## 1.2 팩토리 패턴
+### 1.2 팩토리 패턴
 
-- 팩토리 패턴은 객체
+<aside>
+💡 팩토리 패턴은 객체를 사용하는 코드에서 객체 생성 부분을 뗴어내 추상화한 패턴이자 상속 관계에 있는 두 클래스에 상위 클래스가 중요한 뼈대를 결정하고, 하위 클래스에서 객체 생성에 관한 구체적인 내용을 결정하는 패턴이다.
+
+</aside>
+
+- 상위 클래스에서는 인스턴스 생성 방식에 대해 전혀 알 필요가 없기 때문에 더 많은 유연성을 갖게 된다.
+- 객체 생성 로직이 따로 떼어져 있기 때문에 코드를 리팩터링하더라도 한 곳만 고칠 수 있게 되니 유지보수성이 증가 된다.
+
+### 자바스크립트 팩토리 패턴
+
+- 자바스크립트에서 팩토리 패턴을 구현한다면 간단하게 new Object()로 구현할 수 있다.
+
+```tsx
+class CoffeeFactory {
+  static createCoffee(type) {
+    const factory = factoryList[type];
+    return factory.createCoffee();
+  }
+}
+class Latte {
+  constructor() {
+    this.name = "latte";
+  }
+}
+class Espresso {
+  constructor() {
+    this.name = "Espresso";
+  }
+}
+
+class LatteFactory extends CoffeeFactory {
+  static createCoffee() {
+    return new Latte();
+  }
+}
+class EspressoFactory extends CoffeeFactory {
+  static createCoffee() {
+    return new Espresso();
+  }
+}
+const factoryList = { LatteFactory, EspressoFactory };
+
+const main = () => {
+  // 라떼 커피를 주문한다.
+  const coffee = CoffeeFactory.createCoffee("LatteFactory");
+  // 커피 이름을 부른다.
+  console.log(coffee.name); // latte
+};
+main();
+```
+
+- LatteFactory에서 생성한 인스턴스를 CoffeeFactory에 주입하고 있기 때문에 의존성 주입이라고 볼 수 있다.
+- static 키워드를 통해 createCoffee() 메서드를 정적 메서드로 정의하면 클래스 기반으로 객체를 만들지 않고 호출이 가능하고, 해당 메서드에 대한 메모리 할당을 한 번만 할 수 있는 장점이 있다.
+
+### 1.3 전략 패턴
+
+<aside>
+💡 전략 패턴은 정책 패턴이라고도 하며, 객체의 행위를 바꾸고 싶은 경우 ‘직접’ 수정하지 않고 전략이라고 부르는 ‘캡슐화한 알고리즘’을 컨텍스트 안에서 바꿔주면서 상호 교체가 가능하게 만드는 패턴이다.
+
+</aside>
+
+### passport의 전략 패턴
+
+- 전략 패턴을 활용한 라이브러리로는 passport가 있다.
+- passport는 Npde.js에서 인증 모듈을 구현할 때 쓰는 미들웨어 라이브러리로, 여러 가지 ’전략’을 기반으로 인증할 수 있게 한다.
+- 다음 코드처럼 ‘전략’만 바꿔서 인증하는 것을 볼 수 있다.
+
+```tsx
+var passport = require("passport"),
+  LocalStrategy = require("passport-local").Strategy;
+
+passport.use(
+  new LocalStrategy(function (username, password, done) {
+    User.findOne({ username: username }, function (err, user) {
+      if (err) {
+        return done(err);
+      }
+      if (!user) {
+        return done(null, false, { message: "Incorrect username." });
+      }
+      if (!user.validPassword(password)) {
+        return done(null, false, { message: "Incorrect password." });
+      }
+      return done(null, user);
+    });
+  })
+);
+```
+
+- passport.use(new LocalStrategy(… 처럼 passport.use()라는 메서드에 ‘전략’을 매개변수로 넣어서 로직을 수행하는 것을 볼 수 있다.
+
+### 1.4 옵저버 패턴
+
+<aside>
+💡 옵저버 패턴은 주체가 어떤 객체의 상태 변화를 관찰하다가 상태 변화가 있을 때마다 메서드 등을 통해 옵저버 목록에 있는 옵저버들에게 변화를 알려주는 디자인 패턴이다.
+
+</aside>
+
+- 여기서 주체란 객체의 상태 변화를 보고 있는 관찰자이며, 옵저버들이란 이 객체의 상태 변화에 따라 전달되는 메서드 등을 기반으로 ‘추가 변화 사항’이 생기는 객체들을 의미한다.
+- 옵저버 패턴을 활용한 서비스로는 트위터가 있다.
+- 옵저버 패턴은 주로 이벤트 기반 시스템에 사용하며 MVC(Model-View-Controller)패턴에도 사용된다.
+
+### 자바스크립트에서의 옵저버 패턴
+
+- 자바스크립트에서의 옵저버 패턴은 프록시 객체를 통해 구현할 수 있다.
+
+### **프록시 객체**
+
+- 프록시 객체는 어떠한 대상의 기본적인 동작의 작업을 가로챌 수 있는 객체를 뜻하며, 자바스크립트에서 프록시 객체는 두 개의 매개변수를 가진다.
+- target: 프록시할 대상
+- handler: target 동작을 가로채고 어떠한 동작을 할 것인지가 설정되어 있는 함수
+
+```jsx
+const handler = {
+  get: function (target, name) {
+    return name === "name" ? `${target.a} ${target.b}` : target[name];
+  },
+};
+const p = new Proxy({ a: "KUNDOL", b: "IS AUMUMU ZANGIN" }, handler);
+console.log(p.name); // KUNDOL IS AUMUMU ZANGIN
+```
+
+- new Proxy()로 a와 b 속성을 가지고 있는 객체와 handler 함수를 매개변수로 넣고 p라는 변수를 선언 했다.
+- p의 name 속성을 참조하니 a와 b라는 속성밖에 없는 객체가 handler의 ‘name이라는 속성에 접근할 때 a와 b를 합쳐서 문자열을 만들라’ 이렇게 name 속성 등 특정 속성에 접근할 때 그 부분을 가로채서 어떠한 로직을 강제할 수 있는 것이 프록시 객체이다.
+
+### 프록시 객체를 이용한 옵저버 패턴
+
+- 자바스크립트의 프록시 객체를 통해 옵저버 패턴
+
+```jsx
+function createReactiveObject(target, callback) {
+  const proxy = new Proxy(target, {
+    set(obj, prop, value) {
+      if (value !== obj[prop]) {
+        const prev = obj[prop];
+        obj[prop] = value;
+        callback(`${prop}가 [${prev}] >> [${value}] 로 변경되었습니다`);
+      }
+      return true;
+    },
+  });
+  return proxy;
+}
+const a = {
+  형규: "솔로",
+};
+const b = createReactiveObject(a, console.log);
+b.형규 = "솔로";
+b.형규 = "커플";
+// 형규가 [솔로] >> [커플] 로 변경되었습니다
+```
+
+- set() 함수를 통해 속성에 대한 접근을 ‘가로채’서 형규라는 속성이 솔로에서 커플로 되는 것을 감시할 수 있다.
+
+### Vue.js 3.0의 옵저버 패턴
